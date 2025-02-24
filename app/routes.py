@@ -492,35 +492,40 @@ async def delete_cargo(
     return None
 
 @router.get(
-    "/api/starships/available",
-    response_model=List[schemas.Starship],
-    summary="Получить список доступных звездолетов",
-    tags=["starships"]
+    "/api/cargo",
+    response_model=List[schemas.Cargo],
+    tags=["cargo"],
+    summary="Получить список всех грузов"
 )
-def get_available_starships(
-        min_capacity: Optional[float] = Query(None, description="Минимальная грузоподъемность в кг"),
-        min_range: Optional[float] = Query(None, description="Минимальная дальность полета в км"),
-        db: Session = Depends(get_db)
+@limiter.limit(RATE_LIMIT_PER_MINUTE["default"])
+async def get_cargo(
+    request: Request,
+    skip: int = Query(0, description="Количество пропускаемых записей", ge=0),
+    limit: int = Query(100, description="Максимальное количество возвращаемых записей", le=1000),
+    db: Session = Depends(get_db)
 ):
     """
-    Возвращает список звездолетов, доступных для погрузки.
+    Получает список всех грузов.
     """
-    try:
-        query = db.query(models.Starship).filter(models.Starship.status == schemas.StarshipStatus.AVAILABLE)
+    return db.query(models.Cargo).offset(skip).limit(limit).all()
 
-        if min_capacity is not None:
-            if min_capacity < 0:
-                raise HTTPException(status_code=400, detail="Минимальная грузоподъемность не может быть отрицательной")
-            query = query.filter(models.Starship.capacity >= min_capacity)
-
-        if min_range is not None:
-            if min_range < 0:
-                raise HTTPException(status_code=400, detail="Минимальная дальность не может быть отрицательной")
-            query = query.filter(models.Starship.range >= min_range)
-
-        return query.all()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Ошибка при получении списка звездолетов")
+@router.get(
+    "/api/starships/available",
+    response_model=List[schemas.Starship],
+    tags=["starships"],
+    summary="Получить список доступных звездолетов"
+)
+@limiter.limit(RATE_LIMIT_PER_MINUTE["default"])
+async def get_available_starships(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Получает список всех звездолетов со статусом AVAILABLE.
+    """
+    return db.query(models.Starship).filter(
+        models.Starship.status == schemas.StarshipStatus.AVAILABLE
+    ).all()
 
 @router.get(
     "/api/history",

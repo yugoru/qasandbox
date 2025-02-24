@@ -26,6 +26,7 @@ try:
         }
     )
 
+
     # Устанавливаем кодировку для соединения
     @event.listens_for(engine, 'connect')
     def set_encoding(dbapi_connection, connection_record):
@@ -33,10 +34,12 @@ try:
         cursor.execute('SET client_encoding TO utf8')
         cursor.close()
 
+
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 except Exception as e:
     print(f"Ошибка при подключении к базе данных: {e}")
     raise
+
 
 # Функция для создания тестовых данных
 def create_test_data(db):
@@ -51,7 +54,7 @@ def create_test_data(db):
                 status=StarshipStatus.AVAILABLE
             ),
             Starship(
-                name="Star Destroyer",
+                name="Battlestar Galactica",
                 capacity=500000,
                 volume=250000,
                 range=2000000,
@@ -65,7 +68,7 @@ def create_test_data(db):
                 status=StarshipStatus.AVAILABLE
             )
         ]
-        
+
         # Создаем тестовые грузы
         cargos = [
             Cargo(
@@ -87,16 +90,16 @@ def create_test_data(db):
                 volume=8.0
             )
         ]
-        
+
         # Добавляем данные в базу
         for starship in starships:
             db.add(starship)
         for cargo in cargos:
             db.add(cargo)
-        
+
         # Создаем тестовую историю погрузок
         db.commit()  # Коммитим чтобы получить ID созданных объектов
-        
+
         shipments = [
             ShipmentHistory(
                 starship_id=1,
@@ -117,32 +120,34 @@ def create_test_data(db):
                 status=ShipmentStatus.CANCELLED
             )
         ]
-        
+
         for shipment in shipments:
             db.add(shipment)
-        
+
         db.commit()
         print("Тестовые данные успешно созданы")
-        
+
     except Exception as e:
         db.rollback()
         print(f"Ошибка при создании тестовых данных: {e}")
         raise
+
 
 # Функция для создания таблиц и тестовых данных
 def init_db():
     try:
         Base.metadata.create_all(bind=engine)
         print("Таблицы успешно созданы.")
-        
+
         # Создаем сессию и добавляем тестовые данные
         db = SessionLocal()
         create_test_data(db)
         db.close()
-        
+
     except Exception as e:
         print(f"Ошибка при инициализации базы данных: {e}")
         raise
+
 
 # Запуск инициализации базы данных
 if __name__ == "__main__":
