@@ -51,4 +51,9 @@ app.include_router(router)
 # Если запускаем напрямую
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host=HOST, port=PORT)
+    uvicorn.run(
+        "main:app",
+        host=HOST,
+        port=PORT,
+        reload=False  # На продакшене отключаем автоперезагрузку
+    )
