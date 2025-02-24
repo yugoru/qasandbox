@@ -12,6 +12,44 @@ from config import RATE_LIMIT_PER_MINUTE
 router = APIRouter()
 
 @router.get(
+    "/api/starships/available",
+    response_model=List[schemas.Starship],
+    tags=["starships"],
+    summary="Получить список доступных звездолетов"
+)
+@limiter.limit(RATE_LIMIT_PER_MINUTE["default"])
+async def get_available_starships(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Получает список всех звездолетов со статусом AVAILABLE.
+    """
+    return db.query(models.Starship).filter(
+        models.Starship.status == schemas.StarshipStatus.AVAILABLE
+    ).all()
+
+@router.get(
+    "/api/starships/{starship_id}",
+    response_model=schemas.Starship,
+    tags=["starships"],
+    summary="Получить информацию о конкретном звездолете"
+)
+@limiter.limit(RATE_LIMIT_PER_MINUTE["default"])
+async def get_starship(
+    request: Request,
+    starship_id: int = Path(..., description="ID звездолета"),
+    db: Session = Depends(get_db)
+):
+    """
+    Получает информацию о конкретном звездолете по ID.
+    """
+    starship = db.query(models.Starship).filter(models.Starship.id == starship_id).first()
+    if not starship:
+        raise HTTPException(status_code=404, detail="Звездолет не найден")
+    return starship
+
+@router.get(
     "/api/starships",
     response_model=List[schemas.Starship],
     tags=["starships"],
@@ -255,24 +293,6 @@ async def create_starship(
     db.refresh(db_starship)
     return db_starship
 
-@router.get(
-    "/api/starships/{starship_id}",
-    response_model=schemas.Starship,
-    tags=["starships"],
-    summary="Получить информацию о конкретном звездолете"
-)
-def get_starship(
-        starship_id: int = Path(..., description="ID звездолета"),
-        db: Session = Depends(get_db)
-):
-    """
-    Получает информацию о конкретном звездолете по его ID.
-    """
-    starship = db.query(models.Starship).filter(models.Starship.id == starship_id).first()
-    if not starship:
-        raise HTTPException(status_code=404, detail="Звездолет не найден")
-    return starship
-
 @router.put(
     "/api/starships/{starship_id}",
     response_model=schemas.Starship,
@@ -508,24 +528,6 @@ async def get_cargo(
     Получает список всех грузов.
     """
     return db.query(models.Cargo).offset(skip).limit(limit).all()
-
-@router.get(
-    "/api/starships/available",
-    response_model=List[schemas.Starship],
-    tags=["starships"],
-    summary="Получить список доступных звездолетов"
-)
-@limiter.limit(RATE_LIMIT_PER_MINUTE["default"])
-async def get_available_starships(
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """
-    Получает список всех звездолетов со статусом AVAILABLE.
-    """
-    return db.query(models.Starship).filter(
-        models.Starship.status == schemas.StarshipStatus.AVAILABLE
-    ).all()
 
 @router.get(
     "/api/history",
