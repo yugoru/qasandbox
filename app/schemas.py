@@ -139,7 +139,9 @@ class ShipmentCreate(BaseModel):
 class ShipmentResponse(BaseModel):
     id: int
     starship_id: int
+    starship_name: str
     cargo_id: int
+    cargo_name: str
     quantity: int
     status: ShipmentStatus
     created_at: datetime

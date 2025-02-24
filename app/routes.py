@@ -536,20 +536,33 @@ async def get_cargo(
     summary="Получить историю погрузок"
 )
 @limiter.limit(RATE_LIMIT_PER_MINUTE["history"])
-def get_shipment_history(
+async def get_shipment_history(
     request: Request,
-    starship_id: Optional[int] = Query(None, description="Фильтр по ID звездолета"),
-    cargo_id: Optional[int] = Query(None, description="Фильтр по ID груза"),
-    status: Optional[schemas.ShipmentStatus] = Query(None, description="Фильтр по статусу"),
-    from_date: Optional[datetime] = Query(None, description="Начальная дата (YYYY-MM-DD)"),
-    to_date: Optional[datetime] = Query(None, description="Конечная дата (YYYY-MM-DD)"),
+    starship_id: Optional[int] = Query(None),
+    cargo_id: Optional[int] = Query(None),
+    status: Optional[schemas.ShipmentStatus] = Query(None),
+    from_date: Optional[datetime] = Query(None),
+    to_date: Optional[datetime] = Query(None),
     db: Session = Depends(get_db)
 ):
     """
     Получает историю погрузок с возможностью фильтрации.
+    Включает названия звездолетов и грузов.
     """
-    query = db.query(models.ShipmentHistory)
-
+    # Создаем базовый запрос с JOIN-ами для получения имен
+    query = db.query(
+        models.ShipmentHistory,
+        models.Starship.name.label('starship_name'),
+        models.Cargo.name.label('cargo_name')
+    ).join(
+        models.Starship,
+        models.ShipmentHistory.starship_id == models.Starship.id
+    ).join(
+        models.Cargo,
+        models.ShipmentHistory.cargo_id == models.Cargo.id
+    )
+    
+    # Применяем фильтры
     if starship_id:
         query = query.filter(models.ShipmentHistory.starship_id == starship_id)
     if cargo_id:
@@ -560,8 +573,24 @@ def get_shipment_history(
         query = query.filter(models.ShipmentHistory.created_at >= from_date)
     if to_date:
         query = query.filter(models.ShipmentHistory.created_at <= to_date)
-
-    return query.order_by(models.ShipmentHistory.created_at.desc()).all()
+    
+    # Получаем результаты
+    results = query.order_by(models.ShipmentHistory.created_at.desc()).all()
+    
+    # Преобразуем результаты в нужный формат
+    return [
+        {
+            "id": result.ShipmentHistory.id,
+            "starship_id": result.ShipmentHistory.starship_id,
+            "starship_name": result.starship_name,
+            "cargo_id": result.ShipmentHistory.cargo_id,
+            "cargo_name": result.cargo_name,
+            "quantity": result.ShipmentHistory.quantity,
+            "status": result.ShipmentHistory.status,
+            "created_at": result.ShipmentHistory.created_at
+        }
+        for result in results
+    ]
 
 @router.post(
     "/api/load/cancel/{shipment_id}",
