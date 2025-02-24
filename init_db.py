@@ -44,6 +44,14 @@ except Exception as e:
 # Функция для создания тестовых данных
 def create_test_data(db):
     try:
+        # Проверяем, есть ли уже данные в базе
+        existing_starships = db.query(Starship).first()
+        existing_cargo = db.query(Cargo).first()
+        
+        if existing_starships or existing_cargo:
+            print("Тестовые данные уже существуют в базе")
+            return
+
         # Создаем тестовые звездолеты
         starships = [
             Starship(
