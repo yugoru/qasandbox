@@ -583,12 +583,12 @@ async def get_shipment_history(
         'completed': 'Completed',
         'cancelled': 'Cancelled'
     }
-    
+
     return [
         {
             "id": result.ShipmentHistory.id,
-            "starship": f"{result.starship_name} (ID: {result.ShipmentHistory.starship_id})",
-            "cargo": f"{result.cargo_name} (ID: {result.ShipmentHistory.cargo_id})",
+            "starship": result.starship_name,
+            "cargo": result.cargo_name,
             "quantity": result.ShipmentHistory.quantity,
             "status": status_translations.get(result.ShipmentHistory.status, result.ShipmentHistory.status),
             "created_at": result.ShipmentHistory.created_at.strftime("%Y-%m-%d %H:%M:%S")
