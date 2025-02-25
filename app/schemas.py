@@ -25,7 +25,7 @@ class StarshipBase(BaseModel):
         description="Грузоподъемность в тоннах (от 0 до 1,000,000)"
     )
     volume: float = Field(
-        ..., 
+        default=1000,
         gt=0,
         le=1000000,
         description="Объем грузового отсека в кубометрах (от 0 до 1,000,000)"
