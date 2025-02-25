@@ -15,37 +15,9 @@ router = APIRouter()
     "/api/starships",
     response_model=List[schemas.Starship],
     tags=["starships"],
-    summary="Получить список всех звездолетов",
-    response_description="Список всех зарегистрированных звездолетов",
-    responses={
-        200: {
-            "description": "Успешное получение списка звездолетов",
-            "content": {
-                "application/json": {
-                    "example": [
-                        {
-                            "id": 1,
-                            "name": "Millennium Falcon",
-                            "capacity": 100000,
-                            "range": 1000000,
-                            "status": "available"
-                        }
-                    ]
-                }
-            }
-        },
-        500: {
-            "description": "Внутренняя ошибка сервера",
-            "content": {
-                "application/json": {
-                    "example": {"detail": "Ошибка при получении списка звездолетов"}
-                }
-            }
-        }
-    }
+    summary="Получить список всех звездолетов"
 )
-@limiter.limit(RATE_LIMIT_PER_MINUTE["default"])
-async def get_starships(
+async def get_all_starships(
     request: Request,
     db: Session = Depends(get_db)
 ):
@@ -55,12 +27,11 @@ async def get_starships(
     return db.query(models.Starship).all()
 
 @router.get(
-    "/api/starships-available",
+    "/api/starships/status/available",
     response_model=List[schemas.Starship],
     tags=["starships"],
     summary="Получить список доступных звездолетов"
 )
-@limiter.limit(RATE_LIMIT_PER_MINUTE["default"])
 async def get_available_starships(
     request: Request,
     db: Session = Depends(get_db)
@@ -76,9 +47,8 @@ async def get_available_starships(
     "/api/starships/{starship_id}",
     response_model=schemas.Starship,
     tags=["starships"],
-    summary="Получить информацию о конкретном звездолете"
+    summary="Получить информацию о звездолете"
 )
-@limiter.limit(RATE_LIMIT_PER_MINUTE["default"])
 async def get_starship(
     request: Request,
     starship_id: int = Path(..., description="ID звездолета"),
