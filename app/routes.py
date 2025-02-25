@@ -12,7 +12,50 @@ from config import RATE_LIMIT_PER_MINUTE
 router = APIRouter()
 
 @router.get(
-    "/api/starships/available",
+    "/api/starships",
+    response_model=List[schemas.Starship],
+    tags=["starships"],
+    summary="Получить список всех звездолетов",
+    response_description="Список всех зарегистрированных звездолетов",
+    responses={
+        200: {
+            "description": "Успешное получение списка звездолетов",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "id": 1,
+                            "name": "Millennium Falcon",
+                            "capacity": 100000,
+                            "range": 1000000,
+                            "status": "available"
+                        }
+                    ]
+                }
+            }
+        },
+        500: {
+            "description": "Внутренняя ошибка сервера",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Ошибка при получении списка звездолетов"}
+                }
+            }
+        }
+    }
+)
+@limiter.limit(RATE_LIMIT_PER_MINUTE["default"])
+async def get_starships(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Получает список всех звездолетов.
+    """
+    return db.query(models.Starship).all()
+
+@router.get(
+    "/api/starships/list/available",
     response_model=List[schemas.Starship],
     tags=["starships"],
     summary="Получить список доступных звездолетов"
@@ -48,46 +91,6 @@ async def get_starship(
     if not starship:
         raise HTTPException(status_code=404, detail="Звездолет не найден")
     return starship
-
-@router.get(
-    "/api/starships",
-    response_model=List[schemas.Starship],
-    tags=["starships"],
-    summary="Получить список всех звездолетов",
-    response_description="Список всех зарегистрированных звездолетов",
-    responses={
-        200: {
-            "description": "Успешное получение списка звездолетов",
-            "content": {
-                "application/json": {
-                    "example": [
-                        {
-                            "id": 1,
-                            "name": "Millennium Falcon",
-                            "capacity": 100000,
-                            "range": 1000000,
-                            "status": "available"
-                        }
-                    ]
-                }
-            }
-        },
-        500: {
-            "description": "Внутренняя ошибка сервера",
-            "content": {
-                "application/json": {
-                    "example": {"detail": "Ошибка при получении списка звездолетов"}
-                }
-            }
-        }
-    }
-)
-@limiter.limit(RATE_LIMIT_PER_MINUTE["default"])
-async def get_starships(request: Request, db: Session = Depends(get_db)):
-    """
-    Получает список всех звездолетов в системе.
-    """
-    return db.query(models.Starship).all()
 
 @router.get(
     "/api/inventory",
@@ -531,7 +534,7 @@ async def get_cargo(
 
 @router.get(
     "/api/history",
-    response_model=List[schemas.ShipmentResponse],
+    response_model=List[dict],
     tags=["history"],
     summary="Получить историю погрузок"
 )
@@ -547,9 +550,8 @@ async def get_shipment_history(
 ):
     """
     Получает историю погрузок с возможностью фильтрации.
-    Включает названия звездолетов и грузов.
+    Возвращает подробную информацию о каждой операции.
     """
-    # Создаем базовый запрос с JOIN-ами для получения имен
     query = db.query(
         models.ShipmentHistory,
         models.Starship.name.label('starship_name'),
@@ -562,7 +564,6 @@ async def get_shipment_history(
         models.ShipmentHistory.cargo_id == models.Cargo.id
     )
     
-    # Применяем фильтры
     if starship_id:
         query = query.filter(models.ShipmentHistory.starship_id == starship_id)
     if cargo_id:
@@ -574,20 +575,23 @@ async def get_shipment_history(
     if to_date:
         query = query.filter(models.ShipmentHistory.created_at <= to_date)
     
-    # Получаем результаты
     results = query.order_by(models.ShipmentHistory.created_at.desc()).all()
     
-    # Преобразуем результаты в нужный формат
+    # Словарь для перевода статусов
+    status_translations = {
+        'loading': 'Загрузка',
+        'completed': 'Завершено',
+        'cancelled': 'Отменено'
+    }
+    
     return [
         {
             "id": result.ShipmentHistory.id,
-            "starship_id": result.ShipmentHistory.starship_id,
-            "starship_name": result.starship_name,
-            "cargo_id": result.ShipmentHistory.cargo_id,
-            "cargo_name": result.cargo_name,
-            "quantity": result.ShipmentHistory.quantity,
-            "status": result.ShipmentHistory.status,
-            "created_at": result.ShipmentHistory.created_at
+            "звездолет": f"{result.starship_name} (ID: {result.ShipmentHistory.starship_id})",
+            "груз": f"{result.cargo_name} (ID: {result.ShipmentHistory.cargo_id})",
+            "количество": result.ShipmentHistory.quantity,
+            "статус": status_translations.get(result.ShipmentHistory.status, result.ShipmentHistory.status),
+            "дата": result.ShipmentHistory.created_at.strftime("%d.%m.%Y %H:%M:%S")
         }
         for result in results
     ]
