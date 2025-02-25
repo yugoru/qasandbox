@@ -55,7 +55,7 @@ async def get_starships(
     return db.query(models.Starship).all()
 
 @router.get(
-    "/api/starships/list/available",
+    "/api/starships-available",
     response_model=List[schemas.Starship],
     tags=["starships"],
     summary="Получить список доступных звездолетов"
@@ -579,19 +579,19 @@ async def get_shipment_history(
     
     # Словарь для перевода статусов
     status_translations = {
-        'loading': 'Загрузка',
-        'completed': 'Завершено',
-        'cancelled': 'Отменено'
+        'loading': 'Loading',
+        'completed': 'Completed',
+        'cancelled': 'Cancelled'
     }
     
     return [
         {
             "id": result.ShipmentHistory.id,
-            "звездолет": f"{result.starship_name} (ID: {result.ShipmentHistory.starship_id})",
-            "груз": f"{result.cargo_name} (ID: {result.ShipmentHistory.cargo_id})",
-            "количество": result.ShipmentHistory.quantity,
-            "статус": status_translations.get(result.ShipmentHistory.status, result.ShipmentHistory.status),
-            "дата": result.ShipmentHistory.created_at.strftime("%d.%m.%Y %H:%M:%S")
+            "starship": f"{result.starship_name} (ID: {result.ShipmentHistory.starship_id})",
+            "cargo": f"{result.cargo_name} (ID: {result.ShipmentHistory.cargo_id})",
+            "quantity": result.ShipmentHistory.quantity,
+            "status": status_translations.get(result.ShipmentHistory.status, result.ShipmentHistory.status),
+            "created_at": result.ShipmentHistory.created_at.strftime("%Y-%m-%d %H:%M:%S")
         }
         for result in results
     ]
@@ -696,4 +696,109 @@ async def get_starship_load(
             }
             for sh in current_shipments
         ]
-    } 
+    }
+
+@router.put(
+    "/api/starships/{starship_id}/status",
+    response_model=schemas.Starship,
+    tags=["starships"],
+    summary="Изменить статус звездолета"
+)
+async def update_starship_status(
+    request: Request,
+    starship_id: int = Path(..., description="ID звездолета"),
+    new_status: schemas.StarshipStatus = Body(..., description="Новый статус звездолета"),
+    db: Session = Depends(get_db)
+):
+    """
+    Изменяет статус звездолета.
+    
+    Возможные статусы:
+    * available - доступен для погрузки
+    * maintenance - на техобслуживании
+    * in_flight - в полёте
+    * loading - идёт погрузка
+    """
+    starship = db.query(models.Starship).filter(models.Starship.id == starship_id).first()
+    if not starship:
+        raise HTTPException(status_code=404, detail="Звездолет не найден")
+    
+    # Проверяем возможность изменения статуса
+    if starship.status == schemas.StarshipStatus.LOADING:
+        active_shipments = db.query(models.ShipmentHistory).filter(
+            models.ShipmentHistory.starship_id == starship_id,
+            models.ShipmentHistory.status == schemas.ShipmentStatus.LOADING
+        ).first()
+        if active_shipments:
+            raise HTTPException(
+                status_code=400, 
+                detail="Невозможно изменить статус: есть активные погрузки"
+            )
+    
+    starship.status = new_status
+    db.commit()
+    db.refresh(starship)
+    return starship
+
+@router.put(
+    "/api/shipments/{shipment_id}/status",
+    response_model=schemas.ShipmentResponse,
+    tags=["shipments"],
+    summary="Изменить статус погрузки"
+)
+async def update_shipment_status(
+    request: Request,
+    shipment_id: int = Path(..., description="ID погрузки"),
+    new_status: schemas.ShipmentStatus = Body(..., description="Новый статус погрузки"),
+    db: Session = Depends(get_db)
+):
+    """
+    Изменяет статус погрузки.
+    
+    Возможные статусы:
+    * loading - идёт погрузка
+    * completed - погрузка завершена
+    * cancelled - погрузка отменена
+    
+    При отмене погрузки груз возвращается на склад.
+    При завершении погрузки звездолет становится доступным для полета.
+    """
+    shipment = db.query(models.ShipmentHistory).filter(
+        models.ShipmentHistory.id == shipment_id
+    ).first()
+    if not shipment:
+        raise HTTPException(status_code=404, detail="Погрузка не найдена")
+    
+    # Получаем связанные объекты
+    starship = db.query(models.Starship).filter(
+        models.Starship.id == shipment.starship_id
+    ).first()
+    cargo = db.query(models.Cargo).filter(
+        models.Cargo.id == shipment.cargo_id
+    ).first()
+    
+    # Обработка изменения статуса
+    if new_status == schemas.ShipmentStatus.CANCELLED:
+        # Возвращаем груз на склад
+        cargo.quantity += shipment.quantity
+        # Освобождаем звездолет
+        if not db.query(models.ShipmentHistory).filter(
+            models.ShipmentHistory.starship_id == starship.id,
+            models.ShipmentHistory.status == schemas.ShipmentStatus.LOADING,
+            models.ShipmentHistory.id != shipment_id
+        ).first():
+            starship.status = schemas.StarshipStatus.AVAILABLE
+            
+    elif new_status == schemas.ShipmentStatus.COMPLETED:
+        # Делаем звездолет доступным для полета
+        if not db.query(models.ShipmentHistory).filter(
+            models.ShipmentHistory.starship_id == starship.id,
+            models.ShipmentHistory.status == schemas.ShipmentStatus.LOADING,
+            models.ShipmentHistory.id != shipment_id
+        ).first():
+            starship.status = schemas.StarshipStatus.AVAILABLE
+    
+    shipment.status = new_status
+    db.commit()
+    db.refresh(shipment)
+    return shipment 
