@@ -8,6 +8,7 @@ from app import schemas, models
 from app.db import get_db
 from app.limiter import limiter
 from config import RATE_LIMIT_PER_MINUTE
+from app.security import get_current_user
 
 router = APIRouter()
 
@@ -34,10 +35,12 @@ async def get_all_starships(
 )
 async def get_available_starships(
     request: Request,
+    token: str = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Получает список всех звездолетов со статусом AVAILABLE.
+    Требует JWT токен для авторизации.
     """
     return db.query(models.Starship).filter(
         models.Starship.status == schemas.StarshipStatus.AVAILABLE
@@ -247,6 +250,7 @@ async def load_cargo(
 async def create_starship(
     request: Request,
     starship: schemas.StarshipBase,
+    token: str = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """

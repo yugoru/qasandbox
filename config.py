@@ -39,4 +39,10 @@ CLEANUP_HISTORY_DAYS = 1  # Количество дней хранения ис�
 STUCK_LOADING_HOURS = 1   # Количество часов до освобождения "зависших" кораблей
 
 # API Settings
-API_V1_STR = "/api" 
+API_V1_STR = "/api"
+
+# API Security Settings
+TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
+
+if TEST_MODE:
+    print("WARNING: Running in TEST_MODE. Token verification is disabled!") 
