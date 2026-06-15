@@ -13,7 +13,10 @@ from app.exceptions import (
 from app.limiter import limiter
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
-from config import HOST, PORT, CORS_ORIGINS
+from config import HOST, PORT, CORS_ORIGINS, PROJECT_NAME, VERSION
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Создаем приложение
 app = FastAPI()
@@ -47,6 +50,44 @@ app.add_middleware(
 # Импортируем все роуты
 from app.routes import router
 app.include_router(router)
+
+
+# Инициализация БД при старте — отказоустойчиво.
+# Если БД недоступна, приложение всё равно поднимется (отдаст /docs и /health),
+# а не упадёт целиком с 502 на этапе импорта.
+from app.db import init_models
+
+
+@app.on_event("startup")
+def on_startup():
+    try:
+        init_models()
+        logger.info("База данных инициализирована успешно")
+    except Exception:
+        logger.exception(
+            "Не удалось инициализировать БД при старте. Приложение поднято, "
+            "но эндпоинты, работающие с БД, будут возвращать ошибки."
+        )
+
+
+@app.get("/", include_in_schema=False)
+def root():
+    """Корень сервиса — короткая навигация."""
+    return {
+        "service": PROJECT_NAME,
+        "version": VERSION,
+        "docs": "/docs",
+        "openapi": "/openapi.json",
+        "health": "/health",
+    }
+
+
+@app.get("/health", tags=["service"], summary="Проверка живости сервиса")
+def health():
+    """Liveness-проба для Railway. Не обращается к БД, поэтому отвечает 200,
+    даже если база временно недоступна — это позволяет деплою пройти."""
+    return {"status": "ok"}
+
 
 # Если запускаем напрямую
 if __name__ == "__main__":
