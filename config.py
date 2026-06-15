@@ -1,5 +1,8 @@
 import os
+import logging
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 # Загружаем переменные окружения
 load_dotenv()
@@ -11,7 +14,11 @@ PORT = int(os.getenv("PORT", 8080))  # Railway предоставляет пор
 # Database
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    raise ValueError("DATABASE_URL not set in environment variables")
+    # Раньше тут был raise ValueError, который ронял процесс на этапе импорта
+    # (и Railway отдавал 502 на все адреса, включая /docs). Теперь только
+    # предупреждаем: приложение поднимется и отдаст /docs и /health, а
+    # БД-эндпоинты вернут понятную 503.
+    logger.warning("DATABASE_URL не задан — эндпоинты, работающие с БД, будут недоступны")
 
 # CORS
 CORS_ORIGINS = [
